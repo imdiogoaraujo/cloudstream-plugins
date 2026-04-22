@@ -1,3 +1,4 @@
+cat > .github/workflows/build.yml << 'EOF'
 name: Build Plugins
 
 on:
@@ -31,9 +32,7 @@ jobs:
         uses: android-actions/setup-android@v2
 
       - name: Build Plugins
-         run: |
-          chmod +x gradlew
-          ./gradlew make makeJar
+        run: chmod +x gradlew && ./gradlew make makeJar
 
       - name: Push builds
         run: |
@@ -43,3 +42,4 @@ jobs:
           git add .
           git commit -m "Build plugins" || true
           git push
+EOF

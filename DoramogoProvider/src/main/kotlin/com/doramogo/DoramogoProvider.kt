@@ -23,13 +23,13 @@ class DoramogoProvider : MainAPI() {
     override val supportedTypes = setOf(TvType.TvSeries, TvType.Movie)
 
     override val mainPage = mainPageOf(
-        "$mainUrl/series"                   to "Todos os Doramas",
-        "$mainUrl/category/lancamentos"     to "Lançamentos",
-        "$mainUrl/category/drama"           to "Drama",
-        "$mainUrl/category/comedia"         to "Comédia",
-        "$mainUrl/category/acao"            to "Ação",
-        "$mainUrl/category/fantasia"        to "Fantasia",
-        "$mainUrl/category/romance"         to "Romance",
+        "$mainUrl/series"               to "Todos os Doramas",
+        "$mainUrl/category/lancamentos" to "Lançamentos",
+        "$mainUrl/category/drama"       to "Drama",
+        "$mainUrl/category/comedia"     to "Comédia",
+        "$mainUrl/category/acao"        to "Ação",
+        "$mainUrl/category/fantasia"    to "Fantasia",
+        "$mainUrl/category/romance"     to "Romance",
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
@@ -45,11 +45,19 @@ class DoramogoProvider : MainAPI() {
         return document.select("article.movies, article.post").mapNotNull { it.toSearchResult() }
     }
 
+    private fun fixImageUrl(url: String): String {
+        return when {
+            url.startsWith("//") -> "https:$url"
+            url.startsWith("/") -> "$mainUrl$url"
+            else -> url
+        }
+    }
+
     private fun Element.toSearchResult(): TvSeriesSearchResponse? {
         val anchor = this.selectFirst("a.lnk-blk") ?: return null
         val href = anchor.attr("href").ifBlank { return null }
         val title = this.selectFirst("h2.entry-title")?.text() ?: return null
-        val poster = this.selectFirst("img")?.attr("src")
+        val poster = this.selectFirst("img")?.attr("src")?.let { fixImageUrl(it) }
         val year = this.selectFirst("span.year")?.text()?.toIntOrNull()
         return newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
             this.posterUrl = poster
@@ -63,23 +71,55 @@ class DoramogoProvider : MainAPI() {
         val title = document.selectFirst("h1.entry-title, h1.single-title")?.text() ?: "Sem título"
 
         val poster = document.selectFirst("div.post-thumbnail img, div.poster img, aside img")
-            ?.attr("src")
+            ?.attr("src")?.let { fixImageUrl(it) }
 
         val plot = document.selectFirst("div.description, div.sinopsis, div.content p")?.text()
 
         val year = document.selectFirst("span.year, span.date")?.text()?.toIntOrNull()
 
-        val tags = document.select("div.genres a, span.genres a").map { it.text() }.filter { it.isNotBlank() }
+        val tags = document.select("div.genres a, span.genres a, a[rel=tag]")
+            .map { it.text() }.filter { it.isNotBlank() }
 
-        // O site carrega episódios via JS, mas o iframe do player já está na página
-        // Vamos criar um episódio único apontando para a própria URL da série
-        val episodes = listOf(
-            newEpisode(url) {
-                this.name = title
+        // Busca o post ID para fazer a chamada AJAX de episódios
+        val postId = document.selectFirst("article[id^=post-]")
+            ?.attr("id")?.removePrefix("post-")
+
+        val episodes = mutableListOf<Episode>()
+
+        if (postId != null) {
+            // Chama a API AJAX do WordPress para buscar os episódios
+            try {
+                val ajaxUrl = "$mainUrl/wp-admin/admin-ajax.php"
+                val response = app.post(
+                    ajaxUrl,
+                    data = mapOf(
+                        "action" to "get_episodes",
+                        "post_id" to postId
+                    )
+                ).document
+
+                response.select("a, li a").forEach { epEl ->
+                    val epHref = epEl.attr("href").ifBlank { return@forEach }
+                    val epText = epEl.text().trim()
+                    if (epHref.isNotBlank()) {
+                        episodes.add(newEpisode(epHref) {
+                            this.name = epText.ifBlank { null }
+                        })
+                    }
+                }
+            } catch (e: Exception) {
+                // Se AJAX falhar, usa iframe da página principal
+            }
+        }
+
+        // Se não achou episódios via AJAX, usa a própria URL como episódio único
+        if (episodes.isEmpty()) {
+            episodes.add(newEpisode(url) {
+                this.name = "Episódio 1"
                 this.season = 1
                 this.episode = 1
-            }
-        )
+            })
+        }
 
         return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
             this.posterUrl = poster
@@ -102,7 +142,12 @@ class DoramogoProvider : MainAPI() {
             .filter { it.isNotBlank() && !it.contains("youtube") }
 
         iframes.forEach { iframeUrl ->
-            loadExtractor(iframeUrl, data, subtitleCallback, callback)
+            loadExtractor(
+                if (iframeUrl.startsWith("//")) "https:$iframeUrl" else iframeUrl,
+                data,
+                subtitleCallback,
+                callback
+            )
         }
 
         return iframes.isNotEmpty()

@@ -45,4 +45,4 @@ jobs:
           git config --local user.name "GitHub Action"
           git add .
           git commit -m "Build plugins" || true
-          git push
+          git push --force

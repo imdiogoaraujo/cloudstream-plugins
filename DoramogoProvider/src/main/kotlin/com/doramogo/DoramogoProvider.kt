@@ -1,3 +1,5 @@
+package com.doramogo
+
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
 import com.lagradost.cloudstream3.plugins.Plugin
@@ -25,7 +27,7 @@ class DoramogoProvider : MainAPI() {
 
     override val mainPage = mainPageOf(
         "$mainUrl/episodios"              to "Episódios Recentes",
-        "$mainUrl/dorama"                 to "Todos os Doramas",
+        "$mainUrl/series"                 to "Todos os Doramas",
         "$mainUrl/genero/dorama-drama"    to "Drama",
         "$mainUrl/genero/dorama-romance"  to "Romance",
         "$mainUrl/genero/dorama-comedia"  to "Comédia",
@@ -36,23 +38,25 @@ class DoramogoProvider : MainAPI() {
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val url = if (page == 1) request.data else "${request.data}/page/$page"
         val document = app.get(url).document
-        val items = document.select("article, div.item").mapNotNull { it.toSearchResult() }
+        val items = document.select("div.episode-card").mapNotNull { it.toSearchResult() }
         return newHomePageResponse(request.name, items)
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
         val url = "$mainUrl/search/?q=${java.net.URLEncoder.encode(query, "UTF-8")}"
         val document = app.get(url).document
-        return document.select("article, div.item").mapNotNull { it.toSearchResult() }
+        return document.select("div.episode-card").mapNotNull { it.toSearchResult() }
     }
 
     private fun Element.toSearchResult(): TvSeriesSearchResponse? {
         val anchor = this.selectFirst("a[href]") ?: return null
         val href = anchor.attr("href")
-        val title = this.selectFirst("h3, h2, .title, .nome")?.text()
-            ?: anchor.attr("title").ifBlank { return null }
+        if (href.isBlank()) return null
+        val title = anchor.attr("title").ifBlank {
+            this.selectFirst("div.episode-info, h3, h2")?.text()
+        } ?: return null
         val poster = this.selectFirst("img")?.let {
-            it.attr("data-src").ifBlank { it.attr("src") }
+            it.attr("src").ifBlank { it.attr("data-src") }
         }
         return newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
             this.posterUrl = poster
@@ -63,7 +67,7 @@ class DoramogoProvider : MainAPI() {
         val document = app.get(url).document
         val title = document.selectFirst("h1, .title_dorama, .entry-title")?.text() ?: "Sem título"
         val poster = document.selectFirst("div.poster img, img.poster, img.capa")
-            ?.let { it.attr("data-src").ifBlank { it.attr("src") } }
+            ?.let { it.attr("src").ifBlank { it.attr("data-src") } }
         val plot = document.selectFirst("div.sinopse, div.synopsis, .description, p.desc")?.text()
         val year = document.selectFirst(".ano, .year")?.text()?.trim()?.toIntOrNull()
         val tags = document.select("a[href*='/genero/']").map { it.text() }.filter { it.isNotBlank() }

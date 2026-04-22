@@ -64,33 +64,53 @@ class DoramogoProvider : MainAPI() {
 
         val title = document.selectFirst("h1.font-bold")?.text() ?: "Sem título"
 
-        // Poster vem do background-image do div
-        val posterStyle = document.selectFirst("div#info_drama div[style*=background]")
+        // Poster: imagem dentro do thumbnail
+        val poster = document.selectFirst("div.thumbnail img")
+            ?.let { it.attr("src").ifBlank { it.attr("data-src") } }
+
+        // Background para o banner
+        val backgroundStyle = document.selectFirst("div#info_drama div[style*=background]")
             ?.attr("style") ?: ""
-        val poster = Regex("""url\(['"]?(.*?)['"]?\)""").find(posterStyle)?.groupValues?.get(1)
+        val background = Regex("""url\(['"]?(.*?)['"]?\)""").find(backgroundStyle)
+            ?.groupValues?.get(1)
 
-        val plot = document.selectFirst("p.gens")?.text()
+        // Sinopse
+        val plot = document.selectFirst("p#sinopse-text")?.text()
 
-        val year = document.selectFirst("p.detail")?.text()
-            ?.let { Regex("""(\d{4})""").find(it)?.groupValues?.get(1)?.toIntOrNull() }
+        // Ano a partir do texto "2026 / 24 Episodes"
+        val infoText = document.selectFirst("p.text-opacity-75")?.text() ?: ""
+        val year = Regex("""(\d{4})""").find(infoText)?.groupValues?.get(1)?.toIntOrNull()
 
-        val tags = document.select("a[href*='/genero/']").map { it.text() }.filter { it.isNotBlank() }
+        // Tags/gêneros
+        val tags = document.select("p.gens a").map { it.text() }.filter { it.isNotBlank() }
 
+        // Áudio (Legendado/Dublado)
+        val audio = document.select("div.casts div").firstOrNull {
+            it.text().contains("Áudio")
+        }?.text()?.replace("Áudio:", "")?.trim()
+
+        // Episódios
         val episodes = document.select("a.dorama-one-episode-item").mapNotNull { epEl ->
             val epUrl = epEl.attr("href").ifBlank { return@mapNotNull null }
-            val epText = epEl.text()
-            val seasonNum = Regex("""[Tt]emporada\s*(\d+)""").find(epUrl)?.groupValues?.get(1)?.toIntOrNull() ?: 1
-            val epNum = Regex("""episodio[- ]?(\d+)""").find(epUrl)?.groupValues?.get(1)?.toIntOrNull()
+            val epText = epEl.selectFirst("span.episode-title")?.text()?.trim()
+                ?: epEl.text().trim()
+            val seasonNum = Regex("""temporada[- ]?(\d+)""", RegexOption.IGNORE_CASE)
+                .find(epUrl)?.groupValues?.get(1)?.toIntOrNull() ?: 1
+            val epNum = Regex("""episodio[- ]?0*(\d+)""", RegexOption.IGNORE_CASE)
+                .find(epUrl)?.groupValues?.get(1)?.toIntOrNull()
             newEpisode(epUrl) {
-                this.name = epText.ifBlank { null }
+                this.name = epText
                 this.season = seasonNum
                 this.episode = epNum
             }
         }
 
+        val plotFull = if (audio != null) "$plot\n\nÁudio: $audio" else plot
+
         return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
             this.posterUrl = poster
-            this.plot = plot
+            this.backgroundPosterUrl = background
+            this.plot = plotFull
             this.year = year
             this.tags = tags
         }

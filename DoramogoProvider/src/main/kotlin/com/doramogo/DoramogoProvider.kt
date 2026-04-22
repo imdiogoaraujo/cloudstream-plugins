@@ -26,7 +26,6 @@ class DoramogoProvider : MainAPI() {
     )
 
     override val mainPage = mainPageOf(
-        "$mainUrl/episodios"              to "Episódios Recentes",
         "$mainUrl/series"                 to "Todos os Doramas",
         "$mainUrl/genero/dorama-drama"    to "Drama",
         "$mainUrl/genero/dorama-romance"  to "Romance",

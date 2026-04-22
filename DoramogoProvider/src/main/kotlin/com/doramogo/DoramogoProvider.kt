@@ -59,7 +59,6 @@ class DoramogoProvider : MainAPI() {
         val plot = document.selectFirst("div.sinopse, div.synopsis, .description, p.desc")?.text()
         val year = document.selectFirst(".ano, .year")?.text()?.trim()?.toIntOrNull()
         val tags = document.select("a[href*='/genero/']").map { it.text() }.filter { it.isNotBlank() }
-        val rating = document.selectFirst(".nota, .rating")?.text()?.toRatingInt()
 
         val episodes = document.select("a[href*='/episodio/'], a[href*='/ep-'], ul.episodios li a")
             .mapNotNull { epEl ->
@@ -79,7 +78,6 @@ class DoramogoProvider : MainAPI() {
             this.plot = plot
             this.year = year
             this.tags = tags
-            this.rating = rating
         }
     }
 

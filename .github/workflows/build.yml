@@ -33,6 +33,11 @@ jobs:
       - name: Build Plugins
         run: chmod +x gradlew && ./gradlew make
 
+      - name: Copy cs3 files
+        run: |
+          find . -name "*.cs3" -exec cp {} $GITHUB_WORKSPACE/builds/ \;
+          ls $GITHUB_WORKSPACE/builds/
+
       - name: Push builds
         run: |
           cd $GITHUB_WORKSPACE/builds

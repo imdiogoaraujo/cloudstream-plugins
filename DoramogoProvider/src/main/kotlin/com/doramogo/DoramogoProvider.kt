@@ -16,13 +16,13 @@ class DoramogoProvider : MainAPI() {
     )
 
     override val mainPage = mainPageOf(
-        Pair("$mainUrl/episodios",             "Episódios Recentes"),
-        Pair("$mainUrl/dorama",                "Todos os Doramas"),
-        Pair("$mainUrl/genero/dorama-drama",   "Drama"),
-        Pair("$mainUrl/genero/dorama-romance", "Romance"),
-        Pair("$mainUrl/genero/dorama-comedia", "Comédia"),
-        Pair("$mainUrl/genero/dorama-acao",    "Ação"),
-        Pair("$mainUrl/genero/dorama-fantasia","Fantasia"),
+        "$mainUrl/episodios"             to "Episódios Recentes",
+        "$mainUrl/dorama"                to "Todos os Doramas",
+        "$mainUrl/genero/dorama-drama"   to "Drama",
+        "$mainUrl/genero/dorama-romance" to "Romance",
+        "$mainUrl/genero/dorama-comedia" to "Comédia",
+        "$mainUrl/genero/dorama-acao"    to "Ação",
+        "$mainUrl/genero/dorama-fantasia" to "Fantasia",
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
@@ -33,16 +33,16 @@ class DoramogoProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val url = "$mainUrl/search/?q=${query.encodeUrl()}"
+        val url = "$mainUrl/search/?q=${java.net.URLEncoder.encode(query, "UTF-8")}"
         val document = app.get(url).document
         return document.select("article, div.item").mapNotNull { it.toSearchResult() }
     }
 
     private fun Element.toSearchResult(): TvSeriesSearchResponse? {
-        val titleEl = this.selectFirst("a[href]") ?: return null
-        val href = fixUrl(titleEl.attr("href"))
+        val anchor = this.selectFirst("a[href]") ?: return null
+        val href = anchor.attr("href")
         val title = this.selectFirst("h3, h2, .title, .nome")?.text()
-            ?: titleEl.attr("title").ifBlank { return null }
+            ?: anchor.attr("title").ifBlank { return null }
         val poster = this.selectFirst("img")?.let {
             it.attr("data-src").ifBlank { it.attr("src") }
         }
@@ -57,14 +57,13 @@ class DoramogoProvider : MainAPI() {
         val poster = document.selectFirst("div.poster img, img.poster, img.capa")
             ?.let { it.attr("data-src").ifBlank { it.attr("src") } }
         val plot = document.selectFirst("div.sinopse, div.synopsis, .description, p.desc")?.text()
-        val year = document.selectFirst(".ano, .year, span[class*=year]")?.text()?.trim()?.toIntOrNull()
+        val year = document.selectFirst(".ano, .year")?.text()?.trim()?.toIntOrNull()
         val tags = document.select("a[href*='/genero/']").map { it.text() }.filter { it.isNotBlank() }
-        val rating = document.selectFirst(".nota, .rating, span[class*=imdb]")?.text()?.toRatingInt()
+        val rating = document.selectFirst(".nota, .rating")?.text()?.toRatingInt()
 
         val episodes = document.select("a[href*='/episodio/'], a[href*='/ep-'], ul.episodios li a")
             .mapNotNull { epEl ->
-                val epUrl = fixUrl(epEl.attr("href"))
-                if (epUrl.isBlank()) return@mapNotNull null
+                val epUrl = epEl.attr("href").ifBlank { return@mapNotNull null }
                 val epText = epEl.text()
                 val seasonNum = Regex("""[Tt](\d+)""").find(epText)?.groupValues?.get(1)?.toIntOrNull() ?: 1
                 val epNum = Regex("""[Ee][Pp]?\.?\s*(\d+)""").find(epText)?.groupValues?.get(1)?.toIntOrNull()
@@ -96,29 +95,10 @@ class DoramogoProvider : MainAPI() {
             .mapNotNull { it.attr("src").ifBlank { it.attr("data-src") } }
             .filter { it.isNotBlank() }
 
-        val directLinks = document.select("source[src], a[href$='.mp4']")
-            .mapNotNull { it.attr("src").ifBlank { it.attr("href") } }
-            .filter { it.isNotBlank() }
-
         iframes.forEach { iframeUrl ->
-            loadExtractor(fixUrl(iframeUrl), data, subtitleCallback, callback)
+            loadExtractor(iframeUrl, data, subtitleCallback, callback)
         }
 
-        directLinks.forEach { videoUrl ->
-            callback.invoke(
-                ExtractorLink(
-                    source = name,
-                    name = name,
-                    url = fixUrl(videoUrl),
-                    referer = data,
-                    quality = -1,
-                    isM3u8 = videoUrl.contains(".m3u8")
-                )
-            )
-        }
-
-        return iframes.isNotEmpty() || directLinks.isNotEmpty()
+        return iframes.isNotEmpty()
     }
-
-    private fun String.encodeUrl(): String = java.net.URLEncoder.encode(this, "UTF-8")
 }

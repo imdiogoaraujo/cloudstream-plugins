@@ -1,8 +1,16 @@
-package com.doramogo
-
 import com.lagradost.cloudstream3.*
+import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
+import com.lagradost.cloudstream3.plugins.Plugin
 import com.lagradost.cloudstream3.utils.*
 import org.jsoup.nodes.Element
+import android.content.Context
+
+@CloudstreamPlugin
+class DoramogoPlugin : Plugin() {
+    override fun load(context: Context) {
+        registerMainAPI(DoramogoProvider())
+    }
+}
 
 class DoramogoProvider : MainAPI() {
 
@@ -16,12 +24,12 @@ class DoramogoProvider : MainAPI() {
     )
 
     override val mainPage = mainPageOf(
-        "$mainUrl/episodios"             to "Episódios Recentes",
-        "$mainUrl/dorama"                to "Todos os Doramas",
-        "$mainUrl/genero/dorama-drama"   to "Drama",
-        "$mainUrl/genero/dorama-romance" to "Romance",
-        "$mainUrl/genero/dorama-comedia" to "Comédia",
-        "$mainUrl/genero/dorama-acao"    to "Ação",
+        "$mainUrl/episodios"              to "Episódios Recentes",
+        "$mainUrl/dorama"                 to "Todos os Doramas",
+        "$mainUrl/genero/dorama-drama"    to "Drama",
+        "$mainUrl/genero/dorama-romance"  to "Romance",
+        "$mainUrl/genero/dorama-comedia"  to "Comédia",
+        "$mainUrl/genero/dorama-acao"     to "Ação",
         "$mainUrl/genero/dorama-fantasia" to "Fantasia",
     )
 
@@ -88,15 +96,12 @@ class DoramogoProvider : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         val document = app.get(data).document
-
         val iframes = document.select("iframe[src], iframe[data-src]")
             .mapNotNull { it.attr("src").ifBlank { it.attr("data-src") } }
             .filter { it.isNotBlank() }
-
         iframes.forEach { iframeUrl ->
             loadExtractor(iframeUrl, data, subtitleCallback, callback)
         }
-
         return iframes.isNotEmpty()
     }
 }

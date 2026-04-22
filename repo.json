@@ -1,15 +1,9 @@
-[
-  {
-    "url": "https://raw.githubusercontent.com/imdiogoaraujo/cloudstream-plugins/builds/DoramogoProvider.cs3",
-    "name": "Doramogo",
-    "internalName": "DoramogoProvider",
-    "authors": ["imdiogoaraujo"],
-    "description": "Doramas em português do site Doramogo",
-    "repositoryUrl": "https://github.com/imdiogoaraujo/cloudstream-plugins",
-    "language": "pt",
-    "tvTypes": ["TvSeries"],
-    "iconUrl": "https://www.doramogo.net/favicon.ico",
-    "status": 1,
-    "version": 1
-  }
-]
+{
+  "name": "Doramogo Repo",
+  "iconUrl": "https://www.doramogo.net/favicon.ico",
+  "description": "Repositório do plugin Doramogo",
+  "manifestVersion": 1,
+  "pluginLists": [
+    "https://raw.githubusercontent.com/imdiogoaraujo/cloudstream-plugins/builds/plugins.json"
+  ]
+}

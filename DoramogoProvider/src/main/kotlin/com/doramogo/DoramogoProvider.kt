@@ -134,14 +134,15 @@ class DoramogoProvider : MainAPI() {
         val m3u8Url = "$baseUrl/$inicial/$slug/${tempNum}-temporada/$epNum/stream.m3u8"
 
         callback.invoke(
-            ExtractorLink(
+            newExtractorLink(
                 source = name,
                 name = name,
                 url = m3u8Url,
-                referer = mainUrl,
-                quality = Qualities.Unknown.value,
-                isM3u8 = true
-            )
+                type = ExtractorLinkType.M3U8
+            ) {		
+		this.referer = mainUrl
+                this.quality = Qualities.Unknown.value
+            }
         )
         return true
     }

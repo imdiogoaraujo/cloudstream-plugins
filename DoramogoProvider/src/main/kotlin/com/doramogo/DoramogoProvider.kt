@@ -64,32 +64,25 @@ class DoramogoProvider : MainAPI() {
 
         val title = document.selectFirst("h1.font-bold")?.text() ?: "Sem título"
 
-        // Poster: imagem dentro do thumbnail
         val poster = document.selectFirst("div.thumbnail img")
             ?.let { it.attr("src").ifBlank { it.attr("data-src") } }
 
-        // Background para o banner
         val backgroundStyle = document.selectFirst("div#info_drama div[style*=background]")
             ?.attr("style") ?: ""
         val background = Regex("""url\(['"]?(.*?)['"]?\)""").find(backgroundStyle)
             ?.groupValues?.get(1)
 
-        // Sinopse
         val plot = document.selectFirst("p#sinopse-text")?.text()
 
-        // Ano a partir do texto "2026 / 24 Episodes"
         val infoText = document.selectFirst("p.text-opacity-75")?.text() ?: ""
         val year = Regex("""(\d{4})""").find(infoText)?.groupValues?.get(1)?.toIntOrNull()
 
-        // Tags/gêneros
         val tags = document.select("p.gens a").map { it.text() }.filter { it.isNotBlank() }
 
-        // Áudio (Legendado/Dublado)
         val audio = document.select("div.casts div").firstOrNull {
             it.text().contains("Áudio")
         }?.text()?.replace("Áudio:", "")?.trim()
 
-        // Episódios
         val episodes = document.select("a.dorama-one-episode-item").mapNotNull { epEl ->
             val epUrl = epEl.attr("href").ifBlank { return@mapNotNull null }
             val epText = epEl.selectFirst("span.episode-title")?.text()?.trim()
@@ -122,13 +115,34 @@ class DoramogoProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        // URL do episódio ex: /series/papel-de-rainha/temporada-1/episodio-01
+        // Extrai o slug, temporada e episódio da URL
+        val regex = Regex("""/series/([^/]+)/temporada-(\d+)/episodio-0*(\d+)""")
+        val match = regex.find(data) ?: return false
+
+        val slug = match.groupValues[1]
+        val tempNum = match.groupValues[2].padStart(2, '0')
+        val epNum = match.groupValues[3].padStart(2, '0')
+        val inicial = slug.first().uppercaseChar()
+
+        // Busca o base URL da página do episódio
         val document = app.get(data).document
-        val iframes = document.select("iframe[src], iframe[data-src]")
-            .mapNotNull { it.attr("src").ifBlank { it.attr("data-src") } }
-            .filter { it.isNotBlank() }
-        iframes.forEach { iframeUrl ->
-            loadExtractor(iframeUrl, data, subtitleCallback, callback)
-        }
-        return iframes.isNotEmpty()
+        val pageSource = document.html()
+        val baseUrl = Regex("""base:\s*"([^"]+)"""").find(pageSource)?.groupValues?.get(1)
+            ?: "https://forks-doramas.ondemax.shop"
+
+        val m3u8Url = "$baseUrl/$inicial/$slug/${tempNum}-temporada/$epNum/stream.m3u8"
+
+        callback.invoke(
+            ExtractorLink(
+                source = name,
+                name = name,
+                url = m3u8Url,
+                referer = mainUrl,
+                quality = Qualities.Unknown.value,
+                isM3u8 = true
+            )
+        )
+        return true
     }
 }

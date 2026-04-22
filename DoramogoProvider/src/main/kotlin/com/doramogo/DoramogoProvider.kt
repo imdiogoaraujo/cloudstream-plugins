@@ -140,8 +140,13 @@ class DoramogoProvider : MainAPI() {
                 url = m3u8Url,
                 type = ExtractorLinkType.M3U8
             ) {		
-		this.referer = mainUrl
+		this.referer = data
                 this.quality = Qualities.Unknown.value
+                this.headers = map0f(
+		    "Origin" to mainUrl,
+		    "Referer" to data,
+		    "User-Agent" to "Mozilla/5.0 (Linux; Android 10) AppleWebkit/537.36 Chrome/120.0.0.0 Mobile Safari/537.36"
+		)
             }
         )
         return true

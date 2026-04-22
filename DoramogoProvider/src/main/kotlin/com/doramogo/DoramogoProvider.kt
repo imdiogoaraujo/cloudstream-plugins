@@ -20,10 +20,7 @@ class DoramogoProvider : MainAPI() {
     override var name = "Doramogo"
     override val hasMainPage = true
     override var lang = "pt"
-    override val supportedTypes = setOf(
-        TvType.TvSeries,
-        TvType.Movie
-    )
+    override val supportedTypes = setOf(TvType.TvSeries)
 
     override val mainPage = mainPageOf(
         "$mainUrl/series"                 to "Todos os Doramas",
@@ -64,25 +61,32 @@ class DoramogoProvider : MainAPI() {
 
     override suspend fun load(url: String): LoadResponse {
         val document = app.get(url).document
-        val title = document.selectFirst("h1, .title_dorama, .entry-title")?.text() ?: "Sem título"
-        val poster = document.selectFirst("div.poster img, img.poster, img.capa")
-            ?.let { it.attr("src").ifBlank { it.attr("data-src") } }
-        val plot = document.selectFirst("div.sinopse, div.synopsis, .description, p.desc")?.text()
-        val year = document.selectFirst(".ano, .year")?.text()?.trim()?.toIntOrNull()
+
+        val title = document.selectFirst("h1.font-bold")?.text() ?: "Sem título"
+
+        // Poster vem do background-image do div
+        val posterStyle = document.selectFirst("div#info_drama div[style*=background]")
+            ?.attr("style") ?: ""
+        val poster = Regex("""url\(['"]?(.*?)['"]?\)""").find(posterStyle)?.groupValues?.get(1)
+
+        val plot = document.selectFirst("p.gens")?.text()
+
+        val year = document.selectFirst("p.detail")?.text()
+            ?.let { Regex("""(\d{4})""").find(it)?.groupValues?.get(1)?.toIntOrNull() }
+
         val tags = document.select("a[href*='/genero/']").map { it.text() }.filter { it.isNotBlank() }
 
-        val episodes = document.select("a[href*='/episodio/'], a[href*='/ep-'], ul.episodios li a")
-            .mapNotNull { epEl ->
-                val epUrl = epEl.attr("href").ifBlank { return@mapNotNull null }
-                val epText = epEl.text()
-                val seasonNum = Regex("""[Tt](\d+)""").find(epText)?.groupValues?.get(1)?.toIntOrNull() ?: 1
-                val epNum = Regex("""[Ee][Pp]?\.?\s*(\d+)""").find(epText)?.groupValues?.get(1)?.toIntOrNull()
-                newEpisode(epUrl) {
-                    this.name = epText.ifBlank { null }
-                    this.season = seasonNum
-                    this.episode = epNum
-                }
+        val episodes = document.select("a.dorama-one-episode-item").mapNotNull { epEl ->
+            val epUrl = epEl.attr("href").ifBlank { return@mapNotNull null }
+            val epText = epEl.text()
+            val seasonNum = Regex("""[Tt]emporada\s*(\d+)""").find(epUrl)?.groupValues?.get(1)?.toIntOrNull() ?: 1
+            val epNum = Regex("""episodio[- ]?(\d+)""").find(epUrl)?.groupValues?.get(1)?.toIntOrNull()
+            newEpisode(epUrl) {
+                this.name = epText.ifBlank { null }
+                this.season = seasonNum
+                this.episode = epNum
             }
+        }
 
         return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
             this.posterUrl = poster

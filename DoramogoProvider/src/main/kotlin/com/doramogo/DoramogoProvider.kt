@@ -20,7 +20,7 @@ class DoramogoProvider : MainAPI() {
     override var name = "Doramas Online"
     override val hasMainPage = true
     override var lang = "pt"
-    override val supportedTypes = setOf(TvType.TvSeries, TvType.Movie)
+    override val supportedTypes = setOf(TvType.Movie)
 
     override val mainPage = mainPageOf(
         "$mainUrl/series"               to "Todos os Doramas",
@@ -53,13 +53,13 @@ class DoramogoProvider : MainAPI() {
         }
     }
 
-    private fun Element.toSearchResult(): TvSeriesSearchResponse? {
+    private fun Element.toSearchResult(): MovieSearchResponse? {
         val anchor = this.selectFirst("a.lnk-blk") ?: return null
         val href = anchor.attr("href").ifBlank { return null }
         val title = this.selectFirst("h2.entry-title")?.text() ?: return null
         val poster = this.selectFirst("img")?.attr("src")?.let { fixImageUrl(it) }
         val year = this.selectFirst("span.year")?.text()?.toIntOrNull()
-        return newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
+        return newMovieSearchResponse(title, href, TvType.Movie) {
             this.posterUrl = poster
             this.year = year
         }
@@ -80,48 +80,7 @@ class DoramogoProvider : MainAPI() {
         val tags = document.select("div.genres a, span.genres a, a[rel=tag]")
             .map { it.text() }.filter { it.isNotBlank() }
 
-        // Busca o post ID para fazer a chamada AJAX de episódios
-        val postId = document.selectFirst("article[id^=post-]")
-            ?.attr("id")?.removePrefix("post-")
-
-        val episodes = mutableListOf<Episode>()
-
-        if (postId != null) {
-            // Chama a API AJAX do WordPress para buscar os episódios
-            try {
-                val ajaxUrl = "$mainUrl/wp-admin/admin-ajax.php"
-                val response = app.post(
-                    ajaxUrl,
-                    data = mapOf(
-                        "action" to "get_episodes",
-                        "post_id" to postId
-                    )
-                ).document
-
-                response.select("a, li a").forEach { epEl ->
-                    val epHref = epEl.attr("href").ifBlank { return@forEach }
-                    val epText = epEl.text().trim()
-                    if (epHref.isNotBlank()) {
-                        episodes.add(newEpisode(epHref) {
-                            this.name = epText.ifBlank { null }
-                        })
-                    }
-                }
-            } catch (e: Exception) {
-                // Se AJAX falhar, usa iframe da página principal
-            }
-        }
-
-        // Se não achou episódios via AJAX, usa a própria URL como episódio único
-        if (episodes.isEmpty()) {
-            episodes.add(newEpisode(url) {
-                this.name = "Episódio 1"
-                this.season = 1
-                this.episode = 1
-            })
-        }
-
-        return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
+        return newMovieLoadResponse(title, url, TvType.Movie, url) {
             this.posterUrl = poster
             this.plot = plot
             this.year = year
